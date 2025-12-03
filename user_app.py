@@ -5,7 +5,7 @@ import math
 import re
 import random
 
-from database import LearningRepo
+from database_user import LearningRepo
 
 st.set_page_config(page_title="AI 영어뉴스 학습자 페이지", layout="wide")
 
