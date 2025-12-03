@@ -2,6 +2,7 @@ import os
 from pymongo import MongoClient
 from datetime import datetime
 import dotenv
+import certifi
 
 dotenv.load_dotenv()
 
@@ -12,7 +13,8 @@ class DBConnection:
     def get_client(cls):
         if cls._client is None:
             mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
-            cls._client = MongoClient(mongo_uri)
+            # 클라우드 환경의 SSL 인증서 문제를 해결하기 위해 certifi 옵션 추가
+            cls._client = MongoClient(mongo_uri, tlsCAFile=certifi.where())
         return cls._client
 
 # 1. 원본 뉴스 및 수집 로그 관리 (휘발성)
@@ -103,3 +105,4 @@ class LearningRepo:
 
     def delete_material(self, material_id):
         return self.learn_collection.delete_one({"id": material_id}).deleted_count
+
