@@ -12,7 +12,7 @@ class DBConnection:
     @classmethod
     def get_client(cls):
         if cls._client is None:
-            mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+            mongo_uri = os.getenv("MONGO_URI_FOR_PUBLIC", "mongodb://localhost:27017/")
             # 클라우드 환경의 SSL 인증서 문제를 해결하기 위해 certifi 옵션 추가
             cls._client = MongoClient(mongo_uri, tlsCAFile=certifi.where())
         return cls._client
