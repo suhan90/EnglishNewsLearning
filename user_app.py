@@ -1,6 +1,4 @@
 import streamlit as st
-from datetime import datetime
-import time
 import math
 import re
 import random
@@ -105,37 +103,91 @@ def page_view_content():
     st.title(data['title'])
     st.markdown("---")
 
+    # 헬퍼 함수: 오디오 생성 -> 클라우드 업로드 -> DB URL 저장을 처리
+    def handle_audio_generation(material_id, field_name, text, speed=0.9, is_podcast=False):
+        with st.spinner("오디오 생성 및 클라우드 업로드 중..."):
+            # 1. 오디오 생성 (TTS)
+            if is_podcast:
+                audio_bytes, err = svc['tts'].create_podcast_audio(text, speed)
+            else:
+                audio_bytes, err = svc['tts'].create_summary_audio(text, speed)
+            
+            if not audio_bytes:
+                st.error(f"오류: {err}")
+                return None
+
+            # 2. 클라우드 업로드 (파일 이름: id_field.mp3)
+            filename = f"{material_id}_{field_name}.mp3"
+            audio_url = svc['storage'].upload_file(audio_bytes, filename)
+            
+            if not audio_url:
+                st.error("클라우드 업로드 실패 (스토리지 설정을 확인하세요)")
+                return None
+
+            # 3. DB 업데이트 (URL 저장)
+            svc['learn_db'].update_audio(material_id, field_name, audio_url)
+            return audio_url
+
+    # c1, c2, c3, c4 = st.columns(4)
+    # with c1:
+    # with c2:
+
     # --- 메인 탭 콘텐츠 ---
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "**1. 중요 어휘**", 
-        "**2. 듣기 & 빈칸쓰기**", 
-        "**3. 한영번역**", 
-        "**4. 듣기 & 따라하기**", 
-        "**5. 팟캐스트 듣기**", 
-        "**6. 퀴즈 풀기**", 
-        "**7. 뉴스 원문**"
+        "**1. 어휘 학습**", 
+        "**2. 듣기(빈칸쓰기)**", 
+        "**3. 번역 듣기**", 
+        "**4. 다시 듣기**", 
+        "**5. 팟캐스트**", 
+        "**6. 퀴즈**", 
+        "**7. 원문**"
     ])
 
     with tab1:
         st.subheader("🎧 어휘 설명 듣기")
         if not data.get('audio_vocab_lecture'):
-            st.markdown("죄송합니다. 오디오 생성 권한이 없습니다.")
+            if st.button("🔊 어휘 설명 오디오 생성", key="tts_lec"):
+                # audio, _ = svc['tts'].create_summary_audio(data.get('vocab_lecture', ''), speed=1.0)
+                # if audio:
+                #     data['audio_vocab_lecture'] = audio
+                #     svc['learn_db'].update_audio(data['id'], 'audio_vocab_lecture', audio)
+                #     st.rerun()
+                url = handle_audio_generation(data['id'], 'audio_vocab_lecture', data.get('vocab_lecture', ''), 1.0)
+                if url:
+                    data['audio_vocab_lecture'] = url
+                    st.session_state.viewing_material = data
+                    st.rerun()
         else:
             st.audio(data['audio_vocab_lecture'])
 
-        st.markdown("### 주요 단어와 표현")
+        # st.markdown("### 주요 단어와 표현")
         st.markdown(data['vocab'])
         # st.markdown(data['vocab_lecture'])
 
     with tab2:
-        st.subheader("🎧 요약한 뉴스 듣기")
+        st.subheader("🎧 오디오를 들으며 빈 칸을 채워보세요")
         if not data.get('audio_summary'):
-            st.markdown("죄송합니다. 오디오 생성 권한이 없습니다.")
+            if st.button("🔊 뉴스요약 오디오 생성", key=f"tts_sum_{data['id']}"):
+                # with st.spinner("생성 중..."):
+                #     audio, err = svc['tts'].create_summary_audio(data['summary'], speed=0.85)
+                #     if audio:
+                #         data['audio_summary'] = audio
+                #         # [DB 업데이트] 오디오 데이터 저장
+                #         svc['learn_db'].update_audio(data['id'], 'audio_summary', audio)
+                #         st.session_state.viewing_material = data # 세션 갱신
+                #         st.rerun()
+                #     else:
+                #         st.error(f"오류: {err}")
+                url = handle_audio_generation(data['id'], 'audio_summary', data['summary'], 0.85)
+                if url:
+                    data['audio_summary'] = url
+                    st.session_state.viewing_material = data
+                    st.rerun()
         else:
             st.audio(data['audio_summary'], format="audio/mp3")
 
 
-        st.markdown("### 오디오를 들으며 빈 칸을 채워보세요")
+        # st.markdown("### 오디오를 들으며 빈 칸을 채워보세요")
         dynamic_blank_text = make_blanks(data['summary'], ratio=0.5)
         st.markdown(f"""
         <div style="font-size:1.1rem; line-height:2.0; background-color:#f9f9f920; padding:20px; border-radius:10px;">
@@ -144,9 +196,19 @@ def page_view_content():
         """, unsafe_allow_html=True)
 
     with tab3:
-        st.subheader("🎧 번역 함께 듣기")
+        st.subheader("🎧 번역을 듣고 완전히 이해하세요")
         if not data.get('audio_summary_bi'):
-            st.markdown("죄송합니다. 오디오 생성 권한이 없습니다.")
+            if st.button("🔊 한영 교차 오디오 생성", key="tts_bi"):
+                # audio, _ = svc['tts'].create_summary_audio(data.get('summary_bi', ''), speed=1.0)
+                # if audio:
+                #     data['audio_summary_bi'] = audio
+                #     svc['learn_db'].update_audio(data['id'], 'audio_summary_bi', audio)
+                #     st.rerun()
+                url = handle_audio_generation(data['id'], 'audio_summary_bi', data.get('summary_bi', ''), 1.0)
+                if url:
+                    data['audio_summary_bi'] = url
+                    st.session_state.viewing_material = data
+                    st.rerun()                    
         else:
             st.audio(data['audio_summary_bi'])
 
@@ -161,18 +223,32 @@ def page_view_content():
         st.subheader("🎧 보지 말고 들으세요. 따라 말하세요")
         # 이미 생성된 요약 오디오(URL)를 공유해서 사용
         if not data.get('audio_summary'):
-             st.info("죄송합니다. 오디오 생성 권한이 없습니다.")
+             st.info("Tab 1에서 오디오를 먼저 생성해주세요.")
         else:
             st.audio(data['audio_summary'], format="audio/mp3")
             
     with tab5:
-        st.subheader("🎧 팟캐스트 대화를 들어요")
+        st.subheader("🎧 팟캐스트 대화를 들어보세요")
         if not data.get('audio_podcast'):
-            st.markdown("죄송합니다. 오디오 생성 권한이 없습니다.")
+            if st.button("🎙️ 팟캐스트 오디오 생성", key=f"tts_pod_{data['id']}"):
+                # with st.spinner("AI 성우(2인) 녹음 중... (40-60초)"):
+                #     audio, err = svc['tts'].create_podcast_audio(data['podcast'], speed=0.9)
+                #     if audio:
+                #         data['audio_podcast'] = audio
+                #         svc['learn_db'].update_audio(data['id'], 'audio_podcast', audio)
+                #         st.session_state.viewing_material = data
+                #         st.rerun()
+                #     else:
+                #         st.error(f"오류: {err}")
+                url = handle_audio_generation(data['id'], 'audio_podcast', data['podcast'], 0.9, is_podcast=True)
+                if url:
+                    data['audio_podcast'] = url
+                    st.session_state.viewing_material = data
+                    st.rerun()
         else:
             st.audio(data['audio_podcast'], format="audio/mp3")
 
-        st.markdown("### 대본")
+        # st.markdown("### 대본")
         st.markdown(f"""
         <div class="script-box">
         {data['podcast'].replace(chr(10), "<br>")}
@@ -180,7 +256,7 @@ def page_view_content():
         """, unsafe_allow_html=True)
 
     with tab6:
-        st.subheader("문제를 풀어요")
+        st.subheader("문제를 풀어봅시다")
 
         quizzes = data.get('quiz', [])
         # 데이터가 없거나 형식이 리스트가 아닐 경우(예전 데이터) 예외처리
@@ -227,11 +303,10 @@ def page_view_content():
                             st.info(f"**해설:** {q['explanation']}")
 
     with tab7:
-        st.subheader("더 자세한 내용을 읽어보세요")
+        st.subheader("기사 원문을 읽어보세요")
         for article in data['articles']:
             with st.expander(f"{article['source']} - {article['title']}"):
                 st.write(article.get('full_text', ''))
-
 
 
 # --- 메인 ---
@@ -241,6 +316,7 @@ def main():
     def update_menu(new_menu):
         st.session_state.menu = new_menu
 
+    # 전역에 적용되는 CSS 스타일
     # 전역에 적용되는 CSS 스타일
     st.markdown("""
     <style>
